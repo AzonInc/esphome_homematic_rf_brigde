@@ -18,23 +18,12 @@
 
 #pragma once
 
-#include <cstdio>
-#include <string>
 #include "esphome/core/log.h"
 #include "esphome/core/helpers.h"
-
-// Own implementation, esphome::format_hex_pretty was removed in ESPHome 2026.11
-static inline std::string hm_format_hex_pretty(const unsigned char *data, size_t length) {
-  std::string ret;
-  ret.reserve(length * 3 + 8);
-  char buf[4];
-  for (size_t i = 0; i < length; i++) {
-    snprintf(buf, sizeof(buf), i == 0 ? "%02X" : ".%02X", data[i]);
-    ret += buf;
-  }
-  ret += " (" + std::to_string(length) + ")";
-  return ret;
-}
+// Since ESPHome 2026.11 helpers.h no longer pulls in alloc_helpers.h (format_hex_pretty, str_sprintf)
+#if __has_include("esphome/core/alloc_helpers.h")
+#include "esphome/core/alloc_helpers.h"
+#endif
 
 #define sem_take(__sem, __timeout) (xSemaphoreTake(__sem, __timeout * 1000 / portTICK_PERIOD_MS) == pdTRUE)
 #define sem_give(__sem) xSemaphoreGive(__sem)
@@ -42,5 +31,5 @@ static inline std::string hm_format_hex_pretty(const unsigned char *data, size_t
 
 #define log_frame(__text, __buffer, __len) \
   ESP_LOGD(TAG, __text); \
-  ESP_LOGD(TAG, "%s", (hm_format_hex_pretty(__buffer, __len)).c_str());
+  ESP_LOGD(TAG, "%s", (esphome::format_hex_pretty(__buffer, __len)).c_str());
 // ESP_LOG_BUFFER_HEX_LEVEL(TAG, __buffer, __len, ESP_LOG_DEBUG);
