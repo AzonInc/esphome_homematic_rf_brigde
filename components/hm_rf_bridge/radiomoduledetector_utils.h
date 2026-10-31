@@ -18,18 +18,26 @@
 
 #pragma once
 
+#include <algorithm>
 #include "esphome/core/log.h"
 #include "esphome/core/helpers.h"
-// Since ESPHome 2026.11 helpers.h no longer pulls in alloc_helpers.h (format_hex_pretty, str_sprintf)
-#if __has_include("esphome/core/alloc_helpers.h")
-#include "esphome/core/alloc_helpers.h"
+
+// Logs a frame as hex in chunks through a stack buffer (no heap allocation)
+static inline void hm_log_frame(const char *tag, const char *text, const unsigned char *buffer, size_t len) {
+#if ESPHOME_LOG_LEVEL >= ESPHOME_LOG_LEVEL_DEBUG
+  static constexpr size_t CHUNK_SIZE = 32;
+  char hex[esphome::format_hex_pretty_size(CHUNK_SIZE)];
+  ESP_LOGD(tag, "%s (%u bytes)", text, (unsigned) len);
+  for (size_t pos = 0; pos < len; pos += CHUNK_SIZE) {
+    size_t chunk_len = std::min(CHUNK_SIZE, len - pos);
+    ESP_LOGD(tag, "%s", esphome::format_hex_pretty_to(hex, buffer + pos, chunk_len, '.'));
+  }
 #endif
+}
 
 #define sem_take(__sem, __timeout) (xSemaphoreTake(__sem, __timeout * 1000 / portTICK_PERIOD_MS) == pdTRUE)
 #define sem_give(__sem) xSemaphoreGive(__sem)
 #define sem_init(__sem) __sem = xSemaphoreCreateBinary();
 
-#define log_frame(__text, __buffer, __len) \
-  ESP_LOGD(TAG, __text); \
-  ESP_LOGD(TAG, "%s", (esphome::format_hex_pretty(__buffer, __len)).c_str());
+#define log_frame(__text, __buffer, __len) hm_log_frame(TAG, __text, __buffer, __len)
 // ESP_LOG_BUFFER_HEX_LEVEL(TAG, __buffer, __len, ESP_LOG_DEBUG);

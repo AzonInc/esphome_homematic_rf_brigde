@@ -1,9 +1,6 @@
 #include "hm_rf_bridge.h"
 #include "esphome/core/log.h"
 #include "esphome/core/application.h"
-#if __has_include("esphome/core/alloc_helpers.h")
-#include "esphome/core/alloc_helpers.h"
-#endif
 
 #ifdef USE_ESP32
 #include "radiomoduledetector.h"
@@ -48,8 +45,10 @@ void HmRFBridge::setup() {
 
     auto firmware_version = radio_module_detector.getFirmwareVersion();
 
-    auto firmware_str = esphome::str_sprintf("%u.%u.%u", firmware_version[0], firmware_version[1], firmware_version[2]);
-    ESP_LOGD(TAG, "Firmware Version: %s", firmware_str.c_str());
+    char firmware_str[12];  // "255.255.255\0"
+    snprintf(firmware_str, sizeof(firmware_str), "%u.%u.%u", firmware_version[0], firmware_version[1],
+             firmware_version[2]);
+    ESP_LOGD(TAG, "Firmware Version: %s", firmware_str);
     if (this->firmware_sensor_) {
       this->firmware_sensor_->publish_state(firmware_str);
     }
