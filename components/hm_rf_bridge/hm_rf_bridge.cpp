@@ -45,7 +45,10 @@ void HmRFBridge::setup() {
 
     auto firmware_version = radio_module_detector.getFirmwareVersion();
 
-    auto firmware_str = esphome::str_sprintf("%u.%u.%u", firmware_version[0], firmware_version[1], firmware_version[2]);
+    char firmware_buf[16];
+    snprintf(firmware_buf, sizeof(firmware_buf), "%u.%u.%u", (unsigned) firmware_version[0],
+             (unsigned) firmware_version[1], (unsigned) firmware_version[2]);
+    std::string firmware_str(firmware_buf);
     ESP_LOGD(TAG, "Firmware Version: %s", firmware_str.c_str());
     if (this->firmware_sensor_) {
       this->firmware_sensor_->publish_state(firmware_str);
