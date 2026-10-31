@@ -77,7 +77,7 @@ void HmRFBridge::setup() {
     this->radioModuleConnector_->stop();
     delete this->radioModuleConnector_;
     this->radioModuleConnector_ = nullptr;
-    this->mark_failed();
+    this->mark_failed(LOG_STR("Radio module could not be detected"));
   }
 
   if (this->radio_module_sensor_) {
