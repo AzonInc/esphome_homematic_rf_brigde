@@ -63,7 +63,7 @@ void RawUartUdpListener::handlePacket(unsigned char *data, size_t length, uint32
       if (length == 5 && data[2] == 1) {  // protocol version 1
         atomic_fetch_add(&_endpointConnectionIdentifier, 2);
         atomic_store(&_remotePort, (ushort) 0);
-        atomic_store(&_connectionStarted, false);
+        setConnectionStarted(false);
         atomic_store(&_remoteAddress, addr);
         atomic_store(&_remotePort, port);
         _radioModuleConnector->setLED(true, true, false);
@@ -76,7 +76,7 @@ void RawUartUdpListener::handlePacket(unsigned char *data, size_t length, uint32
         if (data[3] == 0) {
           endpointConnectionIdentifier += 2;
           atomic_store(&_endpointConnectionIdentifier, endpointConnectionIdentifier);
-          atomic_store(&_connectionStarted, false);
+          setConnectionStarted(false);
         } else if (data[3] != (endpointConnectionIdentifier & 0xff)) {
           if (atomic_load(&_remotePort) != 0) {
             ESP_LOGW(TAG, "Received raw-uart reconnect packet with invalid endpoint identifier %d, should be %d", data[3],
@@ -87,7 +87,7 @@ void RawUartUdpListener::handlePacket(unsigned char *data, size_t length, uint32
           ESP_LOGD(TAG, "Received raw-uart reconnect packet with stale endpoint identifier %d, accepting as new connection", data[3]);
           endpointConnectionIdentifier += 2;
           atomic_store(&_endpointConnectionIdentifier, endpointConnectionIdentifier);
-          atomic_store(&_connectionStarted, false);
+          setConnectionStarted(false);
         }
 
         atomic_store(&_remotePort, (ushort) 0);
@@ -106,7 +106,7 @@ void RawUartUdpListener::handlePacket(unsigned char *data, size_t length, uint32
 
     case 1:  // disconnect
       atomic_store(&_remotePort, (ushort) 0);
-      atomic_store(&_connectionStarted, false);
+      setConnectionStarted(false);
       atomic_store(&_remoteAddress, 0u);
       _radioModuleConnector->setLED(false, false, false);
       break;
@@ -138,7 +138,7 @@ void RawUartUdpListener::handlePacket(unsigned char *data, size_t length, uint32
         return;
       }
 
-      atomic_store(&_connectionStarted, true);
+      setConnectionStarted(true);
       ESP_LOGI(TAG, "Connection started");
 
       break;
@@ -149,7 +149,7 @@ void RawUartUdpListener::handlePacket(unsigned char *data, size_t length, uint32
         return;
       }
 
-      atomic_store(&_connectionStarted, false);
+      setConnectionStarted(false);
       break;
 
     case 7:  // Frame
@@ -168,6 +168,11 @@ void RawUartUdpListener::handlePacket(unsigned char *data, size_t length, uint32
 }
 
 bool RawUartUdpListener::isConnected() { return atomic_load(&_connectionStarted); }
+
+void RawUartUdpListener::setConnectionStarted(bool started) {
+  if (_connectionStarted.exchange(started) != started && _onConnectionChanged)
+    _onConnectionChanged();
+}
 
 void RawUartUdpListener::sendMessage(unsigned char command, unsigned char *buffer, size_t len) {
   uint16_t port = atomic_load(&_remotePort);
@@ -255,6 +260,7 @@ void RawUartUdpListener::_udpQueueHandler() {
       if (now > _lastReceivedKeepAlive + 5000000) {  // 5 sec
         atomic_store(&_remotePort, (ushort) 0);
         atomic_store(&_remoteAddress, 0u);
+        setConnectionStarted(false);
         _radioModuleConnector->setLED(true, false, false);
         ESP_LOGW(TAG, "Connection timed out");
       }

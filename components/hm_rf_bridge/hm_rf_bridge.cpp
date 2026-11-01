@@ -35,11 +35,26 @@ void HmRFBridge::detect_task_(void *arg) {
 }
 
 void HmRFBridge::loop() {
-  if (!this->detection_done_.load())
+  if (this->detector_ != nullptr) {
+    if (!this->detection_done_.load())
+      return;
+    this->finish_detection_();
+  }
+
+  // Woken up again by the listener (enable_loop_soon_any_context) whenever the connection changes
+  this->publish_connected_();
+  this->disable_loop();
+}
+
+void HmRFBridge::publish_connected_() {
+#ifdef USE_BINARY_SENSOR
+  if (this->connected_sensor_ == nullptr || this->raw_uart_udp_listener_ == nullptr)
     return;
 
-  this->finish_detection_();
-  this->disable_loop();
+  bool connected = this->raw_uart_udp_listener_->isConnected();
+  if (!this->connected_sensor_->has_state() || connected != this->connected_sensor_->state)
+    this->connected_sensor_->publish_state(connected);
+#endif
 }
 
 void HmRFBridge::finish_detection_() {
@@ -93,6 +108,7 @@ void HmRFBridge::finish_detection_() {
 #endif
 
   this->raw_uart_udp_listener_ = new RawUartUdpListener(this->radio_module_connector_);
+  this->raw_uart_udp_listener_->setOnConnectionChanged([this]() { this->enable_loop_soon_any_context(); });
   if (!this->raw_uart_udp_listener_->start()) {
     delete this->raw_uart_udp_listener_;
     this->raw_uart_udp_listener_ = nullptr;
@@ -105,17 +121,6 @@ void HmRFBridge::finish_detection_() {
   // published value were already "connected", automations would never see the connection.
   if (this->connected_sensor_ != nullptr)
     this->connected_sensor_->publish_state(false);
-#endif
-}
-
-void HmRFBridge::update() {
-#ifdef USE_BINARY_SENSOR
-  if (this->connected_sensor_ == nullptr || this->raw_uart_udp_listener_ == nullptr)
-    return;
-
-  bool connected = this->raw_uart_udp_listener_->isConnected();
-  if (!this->connected_sensor_->has_state() || connected != this->connected_sensor_->state)
-    this->connected_sensor_->publish_state(connected);
 #endif
 }
 
@@ -135,7 +140,6 @@ void HmRFBridge::dump_config() {
                 this->sgtin_, YESNO(this->red_ != nullptr), YESNO(this->green_ != nullptr),
                 YESNO(this->blue_ != nullptr));
   LOG_PIN("  Reset Pin: ", this->reset_pin_);
-  LOG_UPDATE_INTERVAL(this);
 #ifdef USE_BINARY_SENSOR
   LOG_BINARY_SENSOR("  ", "Connected", this->connected_sensor_);
 #endif

@@ -20,11 +20,10 @@
 
 namespace esphome::hm_rf_bridge {
 
-class HmRFBridge : public PollingComponent, public uart::UARTDevice {
+class HmRFBridge : public Component, public uart::UARTDevice {
  public:
   void setup() override;
   void loop() override;
-  void update() override;
   void dump_config() override;
   float get_setup_priority() const override { return setup_priority::ETHERNET; }
 
@@ -46,6 +45,7 @@ class HmRFBridge : public PollingComponent, public uart::UARTDevice {
  protected:
   static void detect_task_(void *arg);
   void finish_detection_();
+  void publish_connected_();
 
   // Detection blocks for up to a few seconds, so it runs in its own task instead of setup()
   RadioModuleDetector *detector_{nullptr};

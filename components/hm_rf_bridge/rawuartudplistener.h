@@ -19,6 +19,7 @@
 #pragma once
 
 #include <atomic>
+#include <functional>
 #include <memory>
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -44,9 +45,11 @@ class RawUartUdpListener : FrameHandler {
   std::unique_ptr<socket::Socket> _socket;
   SemaphoreHandle_t _sendMutex{nullptr};
   TaskHandle_t _tHandle = NULL;
+  std::function<void()> _onConnectionChanged;
 
   void handlePacket(unsigned char *data, size_t length, uint32_t addr, uint16_t port);
   void sendMessage(unsigned char command, unsigned char *buffer, size_t len);
+  void setConnectionStarted(bool started);
 
  public:
   RawUartUdpListener(RadioModuleConnector *radioModuleConnector);
@@ -54,6 +57,8 @@ class RawUartUdpListener : FrameHandler {
   void handleFrame(unsigned char *buffer, uint16_t len);
 
   bool isConnected();
+  // Called from the UDP task whenever isConnected() changes; set before start()
+  void setOnConnectionChanged(std::function<void()> callback) { _onConnectionChanged = std::move(callback); }
 
   bool start();
 

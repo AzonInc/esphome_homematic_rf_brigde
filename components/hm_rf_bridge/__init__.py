@@ -22,9 +22,7 @@ AUTO_LOAD = ["socket"]
 DEPENDENCIES = ["uart", "network"]
 
 hm_rf_bridge_ns = cg.esphome_ns.namespace("hm_rf_bridge")
-HmRFBridge = hm_rf_bridge_ns.class_(
-    "HmRFBridge", cg.PollingComponent, uart.UARTDevice
-)
+HmRFBridge = hm_rf_bridge_ns.class_("HmRFBridge", cg.Component, uart.UARTDevice)
 
 CONF_HM_RF_BRIDGE_ID = "hm_rf_bridge_id"
 CONF_RESET_PIN = "reset_pin"
@@ -63,7 +61,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_GREEN_LED): cv.use_id(output.BinaryOutput),
             cv.Optional(CONF_BLUE_LED): cv.use_id(output.BinaryOutput),
         }
-    ).extend(cv.polling_component_schema("10s")),
+    ).extend(cv.COMPONENT_SCHEMA),
     cv.only_on_esp32,
     _consume_sockets,
 )
