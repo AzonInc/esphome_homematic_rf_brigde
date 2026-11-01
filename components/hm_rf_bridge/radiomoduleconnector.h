@@ -24,6 +24,7 @@
 #include "streamparser.h"
 #include <atomic>
 #include "esphome/components/output/binary_output.h"
+#include "esphome/core/gpio.h"
 
 namespace esphome::hm_rf_bridge {
 
@@ -41,7 +42,7 @@ class RadioModuleConnector {
   LED *_redLED{nullptr};
   LED *_greenLED{nullptr};
   LED *_blueLED{nullptr};
-  BinaryOutput *_reset;
+  GPIOPin *_reset;
   StreamParser *_streamParser;
   std::atomic<FrameHandler *> _frameHandler = ATOMIC_VAR_INIT(0);
   uart_port_t _uart_num;
@@ -52,7 +53,7 @@ class RadioModuleConnector {
   void _handleFrame(unsigned char *buffer, uint16_t len);
 
  public:
-  RadioModuleConnector(BinaryOutput *reset, uart_port_t uart_num, size_t buffer_size);
+  RadioModuleConnector(GPIOPin *reset, uart_port_t uart_num, size_t buffer_size);
 
   void start();
   void stop();

@@ -35,15 +35,10 @@ uart:
 ```
 ---
 
-### 3. Reset und LED-Outputs konfigurieren
+### 3. LED-Outputs konfigurieren
 
 ```yaml
 output:
-  - platform: gpio
-    pin: GPIO33
-    id: reset_pin
-    inverted: True  # HM‑MOD‑RPI‑PCB
-
   - platform: ledc
     pin: GPIO04
     id: green_led
@@ -66,23 +61,31 @@ LEDs nur beim RPI‑RF‑MOD erforderlich.
 ```yaml
 hm_rf_bridge:
   uart_id: hm_uart
-  reset_output: reset_pin
+  reset_pin:
+    number: GPIO33
+    inverted: true  # HM‑MOD‑RPI‑PCB
   red_led: red_led
   green_led: green_led
   blue_led: blue_led
-  connected:    
-    name: "CCU Connected"
-  radio_module_type:
-    name: HM Radio Module Type
-  firmware_version:
-    name: "HM Module Firmware Version"
-  serial:
-    name: "HM Module Serial"
-  sgtin:
-    name: "HM Module SGTIN"
+
+binary_sensor:
+  - platform: hm_rf_bridge
+    connected:
+      name: "CCU Connected"
+
+text_sensor:
+  - platform: hm_rf_bridge
+    radio_module_type:
+      name: "HM Radio Module Type"
+    firmware_version:
+      name: "HM Module Firmware Version"
+    serial:
+      name: "HM Module Serial"
+    sgtin:
+      name: "HM Module SGTIN"
 ```
 
-LEDs und Sensoren sind optional.
+`reset_pin` ist die Reset-Leitung des Funkmoduls; sie wird zum Reset auf HIGH gesetzt, bei einer Low-aktiven Leitung `inverted: true` verwenden. LEDs, `binary_sensor` und `text_sensor` sind optional.
 
 ---
 

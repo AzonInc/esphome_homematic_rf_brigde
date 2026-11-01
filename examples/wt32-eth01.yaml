@@ -43,27 +43,30 @@ uart:
 
 hm_rf_bridge:
   uart_id: uart_hm
-  reset_output: reset_pin
+  reset_pin:
+    number: GPIO33
+    inverted: true
   red_led: red_led
   green_led: green_led
   blue_led: blue_led
-  connected:
-    name: "CCU Connected"
-  radio_module_type:
-    name: HM Radio Module Type
-  firmware_version:
-    name: "HM Module Firmware Version"
-  serial:
-    name: "HM Module Serial"
-  sgtin:
-    name: "HM Module SGTIN"
+
+binary_sensor:
+  - platform: hm_rf_bridge
+    connected:
+      name: "CCU Connected"
+
+text_sensor:
+  - platform: hm_rf_bridge
+    radio_module_type:
+      name: HM Radio Module Type
+    firmware_version:
+      name: "HM Module Firmware Version"
+    serial:
+      name: "HM Module Serial"
+    sgtin:
+      name: "HM Module SGTIN"
 
 output:
-  - platform: gpio
-    pin: GPIO33
-    id: reset_pin
-    inverted: True
-
   - platform: ledc
     pin: GPIO04
     id: green_led

@@ -11,10 +11,13 @@ namespace esphome::hm_rf_bridge {
 static const char *const TAG = "hm_rf_bridge";
 
 void HmRFBridge::setup() {
+  this->reset_pin_->setup();
+  this->reset_pin_->digital_write(false);
+
   // The schema only accepts the native ESP-IDF UART, see __init__.py
   auto *uart_component = static_cast<uart::IDFUARTComponent *>(this->parent_);
-  this->radio_module_connector_ =
-      new RadioModuleConnector(this->reset_, static_cast<uart_port_t>(uart_component->get_hw_serial_number()), 256);
+  this->radio_module_connector_ = new RadioModuleConnector(
+      this->reset_pin_, static_cast<uart_port_t>(uart_component->get_hw_serial_number()), 256);
   this->radio_module_connector_->addLed(this->red_, this->green_, this->blue_);
 
   this->detector_ = new RadioModuleDetector();
@@ -55,8 +58,10 @@ void HmRFBridge::finish_detection_() {
       this->radio_module_type_ = "unknown radio module";
       break;
   }
+#ifdef USE_TEXT_SENSOR
   if (this->radio_module_type_sensor_ != nullptr)
     this->radio_module_type_sensor_->publish_state(this->radio_module_type_);
+#endif
 
   if (type == RADIO_MODULE_NONE) {
     delete this->detector_;
@@ -78,28 +83,40 @@ void HmRFBridge::finish_detection_() {
   ESP_LOGI(TAG, "Detected %s, firmware %s, serial %s, SGTIN %s", this->radio_module_type_, this->firmware_version_,
            this->serial_, this->sgtin_);
 
+#ifdef USE_TEXT_SENSOR
   if (this->firmware_version_sensor_ != nullptr)
     this->firmware_version_sensor_->publish_state(this->firmware_version_);
   if (this->serial_sensor_ != nullptr)
     this->serial_sensor_->publish_state(this->serial_);
   if (this->sgtin_sensor_ != nullptr)
     this->sgtin_sensor_->publish_state(this->sgtin_);
+#endif
 
   this->raw_uart_udp_listener_ = new RawUartUdpListener(this->radio_module_connector_);
   if (!this->raw_uart_udp_listener_->start()) {
     delete this->raw_uart_udp_listener_;
     this->raw_uart_udp_listener_ = nullptr;
     this->mark_failed(LOG_STR("Could not open raw-uart UDP socket"));
+    return;
   }
+
+#ifdef USE_BINARY_SENSOR
+  // Publish "not connected" right away: on_state does not fire for the first state, so if the first
+  // published value were already "connected", automations would never see the connection.
+  if (this->connected_sensor_ != nullptr)
+    this->connected_sensor_->publish_state(false);
+#endif
 }
 
 void HmRFBridge::update() {
+#ifdef USE_BINARY_SENSOR
   if (this->connected_sensor_ == nullptr || this->raw_uart_udp_listener_ == nullptr)
     return;
 
   bool connected = this->raw_uart_udp_listener_->isConnected();
   if (!this->connected_sensor_->has_state() || connected != this->connected_sensor_->state)
     this->connected_sensor_->publish_state(connected);
+#endif
 }
 
 void HmRFBridge::dump_config() {
@@ -117,12 +134,17 @@ void HmRFBridge::dump_config() {
                 uart_component->get_hw_serial_number(), this->radio_module_type_, this->firmware_version_, this->serial_,
                 this->sgtin_, YESNO(this->red_ != nullptr), YESNO(this->green_ != nullptr),
                 YESNO(this->blue_ != nullptr));
+  LOG_PIN("  Reset Pin: ", this->reset_pin_);
   LOG_UPDATE_INTERVAL(this);
+#ifdef USE_BINARY_SENSOR
   LOG_BINARY_SENSOR("  ", "Connected", this->connected_sensor_);
+#endif
+#ifdef USE_TEXT_SENSOR
   LOG_TEXT_SENSOR("  ", "Radio Module Type", this->radio_module_type_sensor_);
   LOG_TEXT_SENSOR("  ", "Firmware Version", this->firmware_version_sensor_);
   LOG_TEXT_SENSOR("  ", "Serial", this->serial_sensor_);
   LOG_TEXT_SENSOR("  ", "SGTIN", this->sgtin_sensor_);
+#endif
 }
 
 }  // namespace esphome::hm_rf_bridge

@@ -30,7 +30,7 @@ static const char *const TAG = "hm_rf_bridge.connector";
 
 static void serialQueueHandlerTask(void *parameter) { ((RadioModuleConnector *) parameter)->_serialQueueHandler(); }
 
-RadioModuleConnector::RadioModuleConnector(BinaryOutput *reset, uart_port_t uart_num, size_t buffer_size)
+RadioModuleConnector::RadioModuleConnector(GPIOPin *reset, uart_port_t uart_num, size_t buffer_size)
     : _reset(reset), _uart_num(uart_num), _buffer_size(buffer_size) {
   using namespace std::placeholders;
   _streamParser = new StreamParser(false, std::bind(&RadioModuleConnector::_handleFrame, this, _1, _2));
@@ -55,9 +55,9 @@ void RadioModuleConnector::setFrameHandler(FrameHandler *frameHandler, bool deco
 }
 
 void RadioModuleConnector::resetModule() {
-  _reset->turn_on();
+  _reset->digital_write(true);
   vTaskDelay(50 / portTICK_PERIOD_MS);
-  _reset->turn_off();
+  _reset->digital_write(false);
   vTaskDelay(50 / portTICK_PERIOD_MS);
 }
 

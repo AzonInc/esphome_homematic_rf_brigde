@@ -40,36 +40,37 @@ external_components:
 
 hm_rf_bridge:
   uart_id: hm_uart
-  reset_output: reset_pin
+  reset_pin: GPIO23  # reset line of the radio module, active high on the HB-RF-ETH
   red_led: red_led
   green_led: green_led
   blue_led: blue_led
-  connected:
-    name: "CCU Connected"
-    id: ccu_connected
-    on_state:
-      - if:
-          condition:
-            lambda: return x;
-          then:
-            - output.turn_on: status_led
-          else:
-            - output.turn_off: status_led
-  radio_module_type:
-    name: HM Radio Module Type
-  firmware_version:
-    name: "HM Module Firmware Version"
-  serial:
-    name: "HM Module Serial"
-  sgtin:
-    name: "HM Module SGTIN"
+
+binary_sensor:
+  - platform: hm_rf_bridge
+    connected:
+      name: "CCU Connected"
+      id: ccu_connected
+      on_state:
+        - if:
+            condition:
+              lambda: return x;
+            then:
+              - output.turn_on: status_led
+            else:
+              - output.turn_off: status_led
+
+text_sensor:
+  - platform: hm_rf_bridge
+    radio_module_type:
+      name: HM Radio Module Type
+    firmware_version:
+      name: "HM Module Firmware Version"
+    serial:
+      name: "HM Module Serial"
+    sgtin:
+      name: "HM Module SGTIN"
 
 output:
-  # Reset line to the radio module (active = HIGH on the HB-RF-ETH!)
-  - platform: gpio
-    pin: GPIO23
-    id: reset_pin
-
   # RGB LED of the RPI-RF-MOD
   - platform: ledc
     pin: GPIO15
