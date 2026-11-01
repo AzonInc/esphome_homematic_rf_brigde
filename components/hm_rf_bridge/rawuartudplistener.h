@@ -23,8 +23,9 @@
 #include "lwip/udp.h"
 
 #include <atomic>
-#define _Atomic(X) std::atomic<X>
 #include "radiomoduleconnector.h"
+
+namespace esphome::hm_rf_bridge {
 
 class RawUartUdpListener : FrameHandler {
  private:
@@ -57,3 +58,5 @@ class RawUartUdpListener : FrameHandler {
   void _udpQueueHandler();
   bool _udpReceivePacket(pbuf *pb, const ip_addr_t *addr, uint16_t port);
 };
+
+}  // namespace esphome::hm_rf_bridge

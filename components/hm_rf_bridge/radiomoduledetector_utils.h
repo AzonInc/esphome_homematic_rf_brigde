@@ -19,25 +19,30 @@
 #pragma once
 
 #include <algorithm>
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "esphome/core/log.h"
 #include "esphome/core/helpers.h"
 
+namespace esphome::hm_rf_bridge {
+
+inline bool sem_take(SemaphoreHandle_t sem, uint32_t timeout_ms) {
+  return xSemaphoreTake(sem, pdMS_TO_TICKS(timeout_ms)) == pdTRUE;
+}
+
+inline void sem_give(SemaphoreHandle_t sem) { xSemaphoreGive(sem); }
+
 // Logs a frame as hex in chunks through a stack buffer (no heap allocation)
-static inline void hm_log_frame(const char *tag, const char *text, const unsigned char *buffer, size_t len) {
+inline void log_frame(const char *tag, const char *text, const unsigned char *buffer, size_t len) {
 #if ESPHOME_LOG_LEVEL >= ESPHOME_LOG_LEVEL_DEBUG
   static constexpr size_t CHUNK_SIZE = 32;
-  char hex[esphome::format_hex_pretty_size(CHUNK_SIZE)];
+  char hex[format_hex_pretty_size(CHUNK_SIZE)];
   ESP_LOGD(tag, "%s (%u bytes)", text, (unsigned) len);
   for (size_t pos = 0; pos < len; pos += CHUNK_SIZE) {
     size_t chunk_len = std::min(CHUNK_SIZE, len - pos);
-    ESP_LOGD(tag, "%s", esphome::format_hex_pretty_to(hex, buffer + pos, chunk_len, '.'));
+    ESP_LOGD(tag, "%s", format_hex_pretty_to(hex, buffer + pos, chunk_len, '.'));
   }
 #endif
 }
 
-#define sem_take(__sem, __timeout) (xSemaphoreTake(__sem, __timeout * 1000 / portTICK_PERIOD_MS) == pdTRUE)
-#define sem_give(__sem) xSemaphoreGive(__sem)
-#define sem_init(__sem) __sem = xSemaphoreCreateBinary();
-
-#define log_frame(__text, __buffer, __len) hm_log_frame(TAG, __text, __buffer, __len)
-// ESP_LOG_BUFFER_HEX_LEVEL(TAG, __buffer, __len, ESP_LOG_DEBUG);
+}  // namespace esphome::hm_rf_bridge

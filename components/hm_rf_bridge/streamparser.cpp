@@ -18,6 +18,8 @@
 
 #include "streamparser.h"
 
+namespace esphome::hm_rf_bridge {
+
 StreamParser::StreamParser(bool decodeEscaped, std::function<void(unsigned char *buffer, uint16_t len)> processor)
     : _bufferPos(0), _state(NO_DATA), _isEscaped(false), _decodeEscaped(decodeEscaped), _processor(processor) {}
 
@@ -90,3 +92,5 @@ void StreamParser::flush() {
 
 bool StreamParser::getDecodeEscaped() { return _decodeEscaped; }
 void StreamParser::setDecodeEscaped(bool decodeEscaped) { _decodeEscaped = decodeEscaped; }
+
+}  // namespace esphome::hm_rf_bridge

@@ -19,6 +19,8 @@
 #include "hmframe.h"
 #include <string.h>
 
+namespace esphome::hm_rf_bridge {
+
 uint16_t HMFrame::crc(unsigned char *buffer, uint16_t len)
 {
     uint16_t crc = 0xd77f;
@@ -112,3 +114,5 @@ uint16_t HMFrame::encode(unsigned char *buffer, uint16_t len, bool escaped)
 
     return res;
 }
+
+}  // namespace esphome::hm_rf_bridge

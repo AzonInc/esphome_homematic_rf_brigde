@@ -23,6 +23,8 @@
 #include "lwip/udp.h"
 #include "lwip/priv/tcpip_priv.h"
 
+namespace esphome::hm_rf_bridge {
+
 typedef struct {
   struct tcpip_api_call_data call;
   udp_pcb *pcb;
@@ -128,3 +130,5 @@ static void _udp_recv(struct udp_pcb *pcb, udp_recv_fn recv, void *recv_arg) {
   msg.recv_arg = recv_arg;
   tcpip_api_call(_udp_recv_api, &msg.call);
 }
+
+}  // namespace esphome::hm_rf_bridge

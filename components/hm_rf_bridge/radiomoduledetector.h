@@ -21,6 +21,8 @@
 #include "radiomoduleconnector.h"
 #include "radiomoduledetector_utils.h"
 
+namespace esphome::hm_rf_bridge {
+
 typedef enum {
   RADIO_MODULE_NONE = 0,
   RADIO_MODULE_HMIP_RFUSB = 1,
@@ -61,10 +63,12 @@ class RadioModuleDetector : private FrameHandler {
   int _detectState;
   int _detectRetryCount;
   int _detectMsgCounter;
-  SemaphoreHandle_t _detectWaitFrameDataSemaphore;
+  SemaphoreHandle_t _detectWaitFrameDataSemaphore{nullptr};
   RadioModuleConnector *_radioModuleConnector;
 
  public:
+  ~RadioModuleDetector();
+
   void detectRadioModule(RadioModuleConnector *radioModuleConnector);
   const char *getSerial();
   uint32_t getBidCosRadioMAC();
@@ -73,3 +77,5 @@ class RadioModuleDetector : private FrameHandler {
   const uint8_t *getFirmwareVersion();
   radio_module_type_t getRadioModuleType();
 };
+
+}  // namespace esphome::hm_rf_bridge

@@ -21,7 +21,14 @@
 #include "radiomoduledetector.h"
 #include "hmframe.h"
 
-static const char *TAG = "RadioModuleDetector";
+namespace esphome::hm_rf_bridge {
+
+static const char *const TAG = "hm_rf_bridge.detector";
+
+RadioModuleDetector::~RadioModuleDetector() {
+  if (_detectWaitFrameDataSemaphore != nullptr)
+    vSemaphoreDelete(_detectWaitFrameDataSemaphore);
+}
 
 void RadioModuleDetector::detectRadioModule(RadioModuleConnector *radioModuleConnector) {
   _radioModuleConnector = radioModuleConnector;
@@ -32,15 +39,15 @@ void RadioModuleDetector::detectRadioModule(RadioModuleConnector *radioModuleCon
 
   _radioModuleType = RADIO_MODULE_NONE;
 
-  sem_init(_detectWaitFrameDataSemaphore);
+  _detectWaitFrameDataSemaphore = xSemaphoreCreateBinary();
 
   _radioModuleConnector->setFrameHandler(this, true);
 
   while (_detectState == DETECT_STATE_START_BL && _detectRetryCount < 3) {
     sendFrame(_detectMsgCounter++, HM_DST_COMMON, HM_CMD_COMMON_IDENTIFY, NULL, 0);
-    if (!sem_take(_detectWaitFrameDataSemaphore, 0.5f)) {
+    if (!sem_take(_detectWaitFrameDataSemaphore, 500)) {
       sendFrame(_detectMsgCounter++, HM_DST_HMSYSTEM, HM_CMD_HMSYSTEM_IDENTIFY, NULL, 0);
-      if (!sem_take(_detectWaitFrameDataSemaphore, 0.5f)) {
+      if (!sem_take(_detectWaitFrameDataSemaphore, 500)) {
         _detectRetryCount++;
       }
     }
@@ -49,9 +56,9 @@ void RadioModuleDetector::detectRadioModule(RadioModuleConnector *radioModuleCon
   _detectRetryCount = 0;
   while (_detectState == DETECT_STATE_START_APP && _detectRetryCount < 3) {
     sendFrame(_detectMsgCounter++, HM_DST_COMMON, HM_CMD_COMMON_IDENTIFY, NULL, 0);
-    if (!sem_take(_detectWaitFrameDataSemaphore, 0.5f)) {
+    if (!sem_take(_detectWaitFrameDataSemaphore, 500)) {
       sendFrame(_detectMsgCounter++, HM_DST_HMSYSTEM, HM_CMD_HMSYSTEM_IDENTIFY, NULL, 0);
-      if (!sem_take(_detectWaitFrameDataSemaphore, 0.5f)) {
+      if (!sem_take(_detectWaitFrameDataSemaphore, 500)) {
         _detectRetryCount++;
       }
     }
@@ -104,7 +111,7 @@ void RadioModuleDetector::detectRadioModule(RadioModuleConnector *radioModuleCon
         break;
     }
 
-    if (_detectState == DETECT_STATE_FINISHED || !sem_take(_detectWaitFrameDataSemaphore, 1)) {
+    if (_detectState == DETECT_STATE_FINISHED || !sem_take(_detectWaitFrameDataSemaphore, 1000)) {
       break;
     }
   }
@@ -113,7 +120,7 @@ void RadioModuleDetector::detectRadioModule(RadioModuleConnector *radioModuleCon
 }
 
 void RadioModuleDetector::handleFrame(unsigned char *buffer, uint16_t len) {
-  log_frame("Received HM frame:", buffer, len);
+  log_frame(TAG, "Received HM frame:", buffer, len);
 
   HMFrame frame;
   if (!HMFrame::TryParse(buffer, len, &frame)) {
@@ -337,7 +344,9 @@ void RadioModuleDetector::sendFrame(uint8_t counter, uint8_t destination, uint8_
   frame.data_len = data_len;
   uint16_t len = frame.encode(sendBuffer, sizeof(sendBuffer), true);
 
-  log_frame("Sending HM frame:", sendBuffer, len);
+  log_frame(TAG, "Sending HM frame:", sendBuffer, len);
 
   _radioModuleConnector->sendFrame(sendBuffer, len);
 }
+
+}  // namespace esphome::hm_rf_bridge

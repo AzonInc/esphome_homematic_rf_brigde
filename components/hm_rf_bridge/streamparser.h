@@ -21,6 +21,8 @@
 #include <stdint.h>
 #include <functional>
 
+namespace esphome::hm_rf_bridge {
+
 typedef enum { NO_DATA, RECEIVE_LENGTH_HIGH_BYTE, RECEIVE_LENGTH_LOW_BYTE, RECEIVE_FRAME_DATA, FRAME_COMPLETE } state_t;
 
 class StreamParser {
@@ -44,3 +46,5 @@ class StreamParser {
   bool getDecodeEscaped();
   void setDecodeEscaped(bool decodeEscaped);
 };
+
+}  // namespace esphome::hm_rf_bridge

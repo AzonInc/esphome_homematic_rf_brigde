@@ -20,6 +20,8 @@
 
 #include <stdint.h>
 
+namespace esphome::hm_rf_bridge {
+
 class HMFrame
 {
 public:
@@ -83,3 +85,5 @@ typedef enum
     HM_CMD_COMMON_GET_SGTIN = 0x04,
     HM_CMD_COMMON_ACK = 0x05,
 } hm_cmd_common_t;
+
+}  // namespace esphome::hm_rf_bridge

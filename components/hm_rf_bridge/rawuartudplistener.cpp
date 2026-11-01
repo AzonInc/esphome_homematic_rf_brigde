@@ -23,11 +23,13 @@
 #include <esp_timer.h>
 #include "esphome/core/log.h"
 
-static const char *TAG = "RawUartUdpListener";
+namespace esphome::hm_rf_bridge {
 
-void _raw_uart_udpQueueHandlerTask(void *parameter) { ((RawUartUdpListener *) parameter)->_udpQueueHandler(); }
+static const char *const TAG = "hm_rf_bridge.raw_uart";
 
-void _raw_uart_udpReceivePaket(void *arg, udp_pcb *pcb, pbuf *pb, const ip_addr_t *addr, uint16_t port) {
+static void _raw_uart_udpQueueHandlerTask(void *parameter) { ((RawUartUdpListener *) parameter)->_udpQueueHandler(); }
+
+static void _raw_uart_udpReceivePaket(void *arg, udp_pcb *pcb, pbuf *pb, const ip_addr_t *addr, uint16_t port) {
   while (pb != NULL) {
     pbuf *this_pb = pb;
     pb = pb->next;
@@ -322,3 +324,5 @@ Payload:
   Reset: Empty
   Frame: Frame-Data
 */
+
+}  // namespace esphome::hm_rf_bridge

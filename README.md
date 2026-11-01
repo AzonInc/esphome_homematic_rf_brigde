@@ -78,7 +78,7 @@ hm_rf_bridge:
     name: "HM Module Firmware Version"
   serial:
     name: "HM Module Serial"
-  SGTIN:
+  sgtin:
     name: "HM Module SGTIN"
 ```
 

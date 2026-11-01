@@ -24,9 +24,11 @@
 #include "esphome/core/helpers.h"
 #include "radiomoduledetector_utils.h"
 
-static const char *TAG = "RadioModuleConnector";
+namespace esphome::hm_rf_bridge {
 
-void serialQueueHandlerTask(void *parameter) { ((RadioModuleConnector *) parameter)->_serialQueueHandler(); }
+static const char *const TAG = "hm_rf_bridge.connector";
+
+static void serialQueueHandlerTask(void *parameter) { ((RadioModuleConnector *) parameter)->_serialQueueHandler(); }
 
 RadioModuleConnector::RadioModuleConnector(BinaryOutput *reset, uart_port_t uart_num, size_t buffer_size)
     : _reset(reset), _uart_num(uart_num), _buffer_size(buffer_size) {
@@ -107,3 +109,5 @@ void RadioModuleConnector::_handleFrame(unsigned char *buffer, uint16_t len) {
     frameHandler->handleFrame(buffer, len);
   }
 }
+
+}  // namespace esphome::hm_rf_bridge

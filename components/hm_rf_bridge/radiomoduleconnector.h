@@ -23,8 +23,9 @@
 #include "driver/uart.h"
 #include "streamparser.h"
 #include <atomic>
-#define _Atomic(X) std::atomic<X>
 #include "esphome/components/output/binary_output.h"
+
+namespace esphome::hm_rf_bridge {
 
 class FrameHandler {
  public:
@@ -71,3 +72,5 @@ class RadioModuleConnector {
     _blueLED = blueLED;
   }
 };
+
+}  // namespace esphome::hm_rf_bridge
