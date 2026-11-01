@@ -86,15 +86,9 @@ LEDs und Sensoren sind optional.
 
 ---
 
-### 5. Optional MDNS konfigurieren
+### 5. mDNS
 
-```yaml
-mdns:
-  services:
-    - service: "_raw-uart"     
-      protocol: "_udp"
-      port: 3008
-```
+Die Komponente meldet den Dienst `_raw-uart._udp` (Port 3008) automatisch per mDNS an, eine eigene `mdns:`-Konfiguration ist nicht nötig. Mit `mdns: disabled: true` wird die Anmeldung abgeschaltet.
 
 ---
 

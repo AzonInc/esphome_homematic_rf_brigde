@@ -7,7 +7,9 @@
 #include "esphome/components/uart/uart.h"
 
 #ifdef USE_ESP32
+#include <atomic>
 #include "radiomoduleconnector.h"
+#include "radiomoduledetector.h"
 #include "rawuartudplistener.h"
 
 namespace esphome::hm_rf_bridge {
@@ -15,6 +17,7 @@ namespace esphome::hm_rf_bridge {
 class HmRFBridge : public PollingComponent, public uart::UARTDevice {
  public:
   void setup() override;
+  void loop() override;
   void update() override;
   void dump_config() override;
   float get_setup_priority() const override { return setup_priority::ETHERNET; }
@@ -31,6 +34,13 @@ class HmRFBridge : public PollingComponent, public uart::UARTDevice {
   void set_sgtin_sensor(text_sensor::TextSensor *sensor) { this->sgtin_sensor_ = sensor; }
 
  protected:
+  static void detect_task_(void *arg);
+  void finish_detection_();
+
+  // Detection blocks for up to a few seconds, so it runs in its own task instead of setup()
+  RadioModuleDetector *detector_{nullptr};
+  std::atomic<bool> detection_done_{false};
+
   RadioModuleConnector *radio_module_connector_{nullptr};
   RawUartUdpListener *raw_uart_udp_listener_{nullptr};
 

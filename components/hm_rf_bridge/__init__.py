@@ -2,9 +2,15 @@ import logging
 
 import esphome.codegen as cg
 from esphome.components import binary_sensor, output, socket, text_sensor, uart
+from esphome.components.mdns import CONF_TXT
 import esphome.config_validation as cv
 from esphome.const import (
+    CONF_DISABLED,
     CONF_ID,
+    CONF_PORT,
+    CONF_PROTOCOL,
+    CONF_SERVICE,
+    CONF_SERVICES,
     CONF_UART_ID,
     DEVICE_CLASS_CONNECTIVITY,
     ENTITY_CATEGORY_DIAGNOSTIC,
@@ -45,10 +51,15 @@ TEXT_SENSOR_SETTERS = {
 }
 
 
+RAW_UART_PORT = 3008
+RAW_UART_SERVICE = "_raw-uart"
+RAW_UART_PROTOCOL = "_udp"
+
+
 def _consume_sockets(config):
     """Register socket needs for this component."""
-    #  1 listening socket + 1 concurrent client connections
-    socket.consume_sockets(2, "HmRFBridge")(config)
+    # One UDP socket for the raw-uart protocol
+    socket.consume_sockets(1, "hm_rf_bridge")(config)
     return config
 
 
@@ -80,11 +91,39 @@ CONFIG_SCHEMA = cv.All(
 )
 
 
+def _add_mdns_service(full_config):
+    """Announce the raw-uart service so the CCU can discover the bridge.
+
+    The mdns component sizes its service storage from its own `services` list, so the service
+    is added there instead of registering it from C++. An entry the user already has is kept.
+    """
+    mdns_config = full_config.get("mdns")
+    if mdns_config is None or mdns_config.get(CONF_DISABLED):
+        return
+    services = mdns_config.setdefault(CONF_SERVICES, [])
+    if any(
+        s[CONF_SERVICE] == RAW_UART_SERVICE and s[CONF_PROTOCOL] == RAW_UART_PROTOCOL
+        for s in services
+    ):
+        return
+    services.append(
+        {
+            CONF_SERVICE: RAW_UART_SERVICE,
+            CONF_PROTOCOL: RAW_UART_PROTOCOL,
+            CONF_PORT: RAW_UART_PORT,
+            CONF_TXT: {},
+        }
+    )
+
+
 def _final_validate(config):
-    if fv.full_config.get().get("wifi"):
+    full_config = fv.full_config.get()
+    if full_config.get("wifi"):
         _LOGGER.warning(
             "Because of latency requirements, it is not recommended to use this component with WiFi"
         )
+
+    _add_mdns_service(full_config)
 
     return uart.final_validate_device_schema(
         "hm_rf_bridge",

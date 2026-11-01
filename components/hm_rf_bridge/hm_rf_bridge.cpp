@@ -5,7 +5,6 @@
 #include <cstdio>
 #include <cstring>
 #include "esphome/components/uart/uart_component_esp_idf.h"
-#include "radiomoduledetector.h"
 
 namespace esphome::hm_rf_bridge {
 
@@ -17,12 +16,32 @@ void HmRFBridge::setup() {
   this->radio_module_connector_ =
       new RadioModuleConnector(this->reset_, static_cast<uart_port_t>(uart_component->get_hw_serial_number()), 256);
   this->radio_module_connector_->addLed(this->red_, this->green_, this->blue_);
-  this->radio_module_connector_->start();
 
-  RadioModuleDetector detector;
-  detector.detectRadioModule(this->radio_module_connector_);
+  this->detector_ = new RadioModuleDetector();
+  if (xTaskCreate(HmRFBridge::detect_task_, "hm_rf_bridge_detect", 4096, this, 5, nullptr) != pdPASS) {
+    this->mark_failed(LOG_STR("Could not start radio module detection"));
+  }
+}
 
-  switch (detector.getRadioModuleType()) {
+void HmRFBridge::detect_task_(void *arg) {
+  auto *self = static_cast<HmRFBridge *>(arg);
+  self->radio_module_connector_->start();  // resets the radio module
+  self->detector_->detectRadioModule(self->radio_module_connector_);
+  self->detection_done_.store(true);
+  vTaskDelete(nullptr);
+}
+
+void HmRFBridge::loop() {
+  if (!this->detection_done_.load())
+    return;
+
+  this->finish_detection_();
+  this->disable_loop();
+}
+
+void HmRFBridge::finish_detection_() {
+  radio_module_type_t type = this->detector_->getRadioModuleType();
+  switch (type) {
     case RADIO_MODULE_NONE:
       this->radio_module_type_ = "No Radio Module";
       break;
@@ -39,7 +58,9 @@ void HmRFBridge::setup() {
   if (this->radio_module_type_sensor_ != nullptr)
     this->radio_module_type_sensor_->publish_state(this->radio_module_type_);
 
-  if (detector.getRadioModuleType() == RADIO_MODULE_NONE) {
+  if (type == RADIO_MODULE_NONE) {
+    delete this->detector_;
+    this->detector_ = nullptr;
     this->radio_module_connector_->stop();
     delete this->radio_module_connector_;
     this->radio_module_connector_ = nullptr;
@@ -47,10 +68,12 @@ void HmRFBridge::setup() {
     return;
   }
 
-  const uint8_t *version = detector.getFirmwareVersion();
+  const uint8_t *version = this->detector_->getFirmwareVersion();
   snprintf(this->firmware_version_, sizeof(this->firmware_version_), "%u.%u.%u", version[0], version[1], version[2]);
-  strncpy(this->serial_, detector.getSerial(), sizeof(this->serial_) - 1);
-  strncpy(this->sgtin_, detector.getSGTIN(), sizeof(this->sgtin_) - 1);
+  strncpy(this->serial_, this->detector_->getSerial(), sizeof(this->serial_) - 1);
+  strncpy(this->sgtin_, this->detector_->getSGTIN(), sizeof(this->sgtin_) - 1);
+  delete this->detector_;
+  this->detector_ = nullptr;
 
   ESP_LOGI(TAG, "Detected %s, firmware %s, serial %s, SGTIN %s", this->radio_module_type_, this->firmware_version_,
            this->serial_, this->sgtin_);
@@ -63,9 +86,11 @@ void HmRFBridge::setup() {
     this->sgtin_sensor_->publish_state(this->sgtin_);
 
   this->raw_uart_udp_listener_ = new RawUartUdpListener(this->radio_module_connector_);
-  this->raw_uart_udp_listener_->start();
-
-  this->disable_loop();
+  if (!this->raw_uart_udp_listener_->start()) {
+    delete this->raw_uart_udp_listener_;
+    this->raw_uart_udp_listener_ = nullptr;
+    this->mark_failed(LOG_STR("Could not open raw-uart UDP socket"));
+  }
 }
 
 void HmRFBridge::update() {

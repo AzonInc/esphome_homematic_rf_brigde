@@ -19,7 +19,7 @@
 #include "rawuartudplistener.h"
 #include "hmframe.h"
 #include <string.h>
-#include "udphelper.h"
+#include <cerrno>
 #include <esp_timer.h>
 #include "esphome/core/log.h"
 
@@ -27,18 +27,7 @@ namespace esphome::hm_rf_bridge {
 
 static const char *const TAG = "hm_rf_bridge.raw_uart";
 
-static void _raw_uart_udpQueueHandlerTask(void *parameter) { ((RawUartUdpListener *) parameter)->_udpQueueHandler(); }
-
-static void _raw_uart_udpReceivePaket(void *arg, udp_pcb *pcb, pbuf *pb, const ip_addr_t *addr, uint16_t port) {
-  while (pb != NULL) {
-    pbuf *this_pb = pb;
-    pb = pb->next;
-    this_pb->next = NULL;
-    if (!((RawUartUdpListener *) arg)->_udpReceivePacket(this_pb, addr, port)) {
-      pbuf_free(this_pb);
-    }
-  }
-}
+static void udp_task(void *parameter) { ((RawUartUdpListener *) parameter)->_udpQueueHandler(); }
 
 RawUartUdpListener::RawUartUdpListener(RadioModuleConnector *radioModuleConnector)
     : _radioModuleConnector(radioModuleConnector) {
@@ -49,9 +38,7 @@ RawUartUdpListener::RawUartUdpListener(RadioModuleConnector *radioModuleConnecto
   atomic_init(&_endpointConnectionIdentifier, 1);
 }
 
-void RawUartUdpListener::handlePacket(pbuf *pb, ip4_addr_t addr, uint16_t port) {
-  size_t length = pb->len;
-  unsigned char *data = (unsigned char *) (pb->payload);
+void RawUartUdpListener::handlePacket(unsigned char *data, size_t length, uint32_t addr, uint16_t port) {
   unsigned char response_buffer[3];
 
   if (length < 4) {
@@ -59,7 +46,7 @@ void RawUartUdpListener::handlePacket(pbuf *pb, ip4_addr_t addr, uint16_t port) 
     return;
   }
 
-  if (data[0] != 0 && (addr.addr != atomic_load(&_remoteAddress) || port != atomic_load(&_remotePort))) {
+  if (data[0] != 0 && (addr != atomic_load(&_remoteAddress) || port != atomic_load(&_remotePort))) {
     ESP_LOGW(TAG, "Received raw-uart packet from invalid address.");
     return;
   }
@@ -77,7 +64,7 @@ void RawUartUdpListener::handlePacket(pbuf *pb, ip4_addr_t addr, uint16_t port) 
         atomic_fetch_add(&_endpointConnectionIdentifier, 2);
         atomic_store(&_remotePort, (ushort) 0);
         atomic_store(&_connectionStarted, false);
-        atomic_store(&_remoteAddress, addr.addr);
+        atomic_store(&_remoteAddress, addr);
         atomic_store(&_remotePort, port);
         _radioModuleConnector->setLED(true, true, false);
         response_buffer[0] = 1;
@@ -104,7 +91,7 @@ void RawUartUdpListener::handlePacket(pbuf *pb, ip4_addr_t addr, uint16_t port) 
         }
 
         atomic_store(&_remotePort, (ushort) 0);
-        atomic_store(&_remoteAddress, addr.addr);
+        atomic_store(&_remoteAddress, addr);
         atomic_store(&_remotePort, port);
         _radioModuleConnector->setLED(true, true, false);
         response_buffer[0] = 2;
@@ -180,34 +167,16 @@ void RawUartUdpListener::handlePacket(pbuf *pb, ip4_addr_t addr, uint16_t port) 
   }
 }
 
-ip4_addr_t RawUartUdpListener::getConnectedRemoteAddress() {
-  uint16_t port = atomic_load(&_remotePort);
-  uint32_t address = atomic_load(&_remoteAddress);
-
-  if (port) {
-    ip4_addr_t res{.addr = address};
-    return res;
-  } else {
-    return ip4_addr_t{.addr = 0};
-  }
-}
-
 bool RawUartUdpListener::isConnected() { return atomic_load(&_connectionStarted); }
 
 void RawUartUdpListener::sendMessage(unsigned char command, unsigned char *buffer, size_t len) {
   uint16_t port = atomic_load(&_remotePort);
   uint32_t address = atomic_load(&_remoteAddress);
 
-  pbuf *pb = pbuf_alloc(PBUF_TRANSPORT, len + 4, PBUF_RAM);
-  unsigned char *sendBuffer = (unsigned char *) pb->payload;
-
-  ip_addr_t addr;
-  ip4_addr_set_u32(ip_2_ip4(&addr), address);
-  IP_SET_TYPE(&addr, IPADDR_TYPE_V4);
-
   if (!port)
     return;
 
+  unsigned char sendBuffer[MAX_PACKET_SIZE];
   sendBuffer[0] = command;
   sendBuffer[1] = (unsigned char) atomic_fetch_add(&_counter, 1);
 
@@ -216,15 +185,22 @@ void RawUartUdpListener::sendMessage(unsigned char command, unsigned char *buffe
 
   *((uint16_t *) (sendBuffer + len + 2)) = htons(HMFrame::crc(sendBuffer, len + 2));
 
-  _udp_sendto(_pcb, pb, &addr, port);
-  pbuf_free(pb);
+  struct sockaddr_in to {};
+  to.sin_family = AF_INET;
+  to.sin_addr.s_addr = address;
+  to.sin_port = htons(port);
+
+  // Called from the UART task (frames) and the UDP task (responses, keep alives)
+  xSemaphoreTake(_sendMutex, portMAX_DELAY);
+  _socket->sendto(sendBuffer, len + 4, 0, reinterpret_cast<struct sockaddr *>(&to), sizeof(to));
+  xSemaphoreGive(_sendMutex);
 }
 
 void RawUartUdpListener::handleFrame(unsigned char *buffer, uint16_t len) {
   if (!atomic_load(&_connectionStarted))
     return;
 
-  if (len > (1500 - 28 - 4)) {
+  if (len > MAX_PACKET_SIZE - 4) {
     ESP_LOGW(TAG, "Received oversized frame from radio module, length %d", len);
     return;
   }
@@ -232,37 +208,45 @@ void RawUartUdpListener::handleFrame(unsigned char *buffer, uint16_t len) {
   sendMessage(7, buffer, len);
 }
 
-void RawUartUdpListener::start() {
-  _udp_queue = xQueueCreate(32, sizeof(udp_event_t *));
-  xTaskCreate(_raw_uart_udpQueueHandlerTask, "RawUartUdpListener_UDP_QueueHandler", 4096, this, 15, &_tHandle);
+bool RawUartUdpListener::start() {
+  _socket = socket::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+  if (_socket == nullptr) {
+    ESP_LOGE(TAG, "Could not create socket");
+    return false;
+  }
 
-  _pcb = _udp_new();
-  _udp_recv(_pcb, &_raw_uart_udpReceivePaket, (void *) this);
+  // The receive timeout drives the keep alive handling in the UDP task
+  struct timeval timeout {
+    .tv_sec = 0, .tv_usec = 100000
+  };
+  _socket->setsockopt(SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 
-  _udp_bind(_pcb, IP4_ADDR_ANY, 3008);
+  struct sockaddr_in bind_addr {};
+  bind_addr.sin_family = AF_INET;
+  bind_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+  bind_addr.sin_port = htons(PORT);
+  if (_socket->bind(reinterpret_cast<struct sockaddr *>(&bind_addr), sizeof(bind_addr)) != 0) {
+    ESP_LOGE(TAG, "Could not bind to port %u: errno %d", PORT, errno);
+    _socket = nullptr;
+    return false;
+  }
 
+  _sendMutex = xSemaphoreCreateMutex();
   _radioModuleConnector->setFrameHandler(this, false);
-}
-
-void RawUartUdpListener::stop() {
-  _udp_disconnect(_pcb);
-  _udp_recv(_pcb, NULL, NULL);
-  _udp_remove(_pcb);
-  _pcb = NULL;
-
-  _radioModuleConnector->setFrameHandler(NULL, false);
-  vTaskDelete(_tHandle);
+  xTaskCreate(udp_task, "hm_rf_bridge_udp", 4096, this, 15, &_tHandle);
+  return true;
 }
 
 void RawUartUdpListener::_udpQueueHandler() {
-  udp_event_t *event = NULL;
+  unsigned char buffer[MAX_PACKET_SIZE];
   int64_t nextKeepAliveSentOut = esp_timer_get_time();
 
   for (;;) {
-    if (xQueueReceive(_udp_queue, &event, (TickType_t) (100 / portTICK_PERIOD_MS)) == pdTRUE) {
-      handlePacket(event->pb, event->addr, event->port);
-      pbuf_free(event->pb);
-      free(event);
+    struct sockaddr_in from {};
+    socklen_t from_len = sizeof(from);
+    ssize_t len = _socket->recvfrom(buffer, sizeof(buffer), reinterpret_cast<struct sockaddr *>(&from), &from_len);
+    if (len > 0 && from.sin_family == AF_INET) {
+      handlePacket(buffer, len, from.sin_addr.s_addr, ntohs(from.sin_port));
     }
 
     if (atomic_load(&_remotePort) != 0) {
@@ -281,34 +265,6 @@ void RawUartUdpListener::_udpQueueHandler() {
       }
     }
   }
-
-  vTaskDelete(NULL);
-}
-
-bool RawUartUdpListener::_udpReceivePacket(pbuf *pb, const ip_addr_t *addr, uint16_t port) {
-  udp_event_t *e = (udp_event_t *) malloc(sizeof(udp_event_t));
-  if (!e) {
-    return false;
-  }
-
-  e->pb = pb;
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wpointer-arith"
-
-  ip_hdr *iphdr = reinterpret_cast<ip_hdr *>(pb->payload - UDP_HLEN - IP_HLEN);
-  e->addr.addr = iphdr->src.addr;
-
-  udp_hdr *udphdr = reinterpret_cast<udp_hdr *>(pb->payload - UDP_HLEN);
-  e->port = ntohs(udphdr->src);
-
-#pragma GCC diagnostic pop
-
-  if (xQueueSend(_udp_queue, &e, portMAX_DELAY) != pdPASS) {
-    free((void *) (e));
-    return false;
-  }
-  return true;
 }
 
 /*

@@ -16,7 +16,8 @@ However, certain portions of this project incorporate code originally licensed u
 - components/hm_rf_bridge/rawuartudplistener.h
 - components/hm_rf_bridge/streamparser.cpp
 - components/hm_rf_bridge/streamparser.h
-- components/hm_rf_bridge/udphelper.h
+
+These files are based on the [HB-RF-ETH firmware](https://github.com/alexreinert/HB-RF-ETH) and have been modified for use as an ESPHome component (namespace, logging, UART handling, UDP transport via sockets).
 
 The GPLv3 license applies to all other parts of this project not explicitly listed above as Apache-licensed.
 

@@ -18,45 +18,46 @@
 
 #pragma once
 
-#include "lwip/opt.h"
-#include "lwip/inet.h"
-#include "lwip/udp.h"
-
 #include <atomic>
+#include <memory>
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
+#include "esphome/components/socket/socket.h"
 #include "radiomoduleconnector.h"
 
 namespace esphome::hm_rf_bridge {
 
 class RawUartUdpListener : FrameHandler {
+ public:
+  static constexpr uint16_t PORT = 3008;
+
  private:
+  static constexpr size_t MAX_PACKET_SIZE = 1500 - 28;  // Ethernet MTU minus IP and UDP header
+
   RadioModuleConnector *_radioModuleConnector;
   std::atomic<uint> _remoteAddress;
   std::atomic<ushort> _remotePort;
   std::atomic<bool> _connectionStarted;
   std::atomic<int> _counter;
   std::atomic<int> _endpointConnectionIdentifier;
-  uint64_t _lastReceivedKeepAlive;
-  udp_pcb *_pcb;
-  QueueHandle_t _udp_queue;
+  uint64_t _lastReceivedKeepAlive{0};
+  std::unique_ptr<socket::Socket> _socket;
+  SemaphoreHandle_t _sendMutex{nullptr};
   TaskHandle_t _tHandle = NULL;
 
-  void handlePacket(pbuf *pb, ip4_addr_t addr, uint16_t port);
+  void handlePacket(unsigned char *data, size_t length, uint32_t addr, uint16_t port);
   void sendMessage(unsigned char command, unsigned char *buffer, size_t len);
 
  public:
   RawUartUdpListener(RadioModuleConnector *radioModuleConnector);
 
   void handleFrame(unsigned char *buffer, uint16_t len);
-  void handleEvent();
 
-  ip4_addr_t getConnectedRemoteAddress();
   bool isConnected();
 
-  void start();
-  void stop();
+  bool start();
 
   void _udpQueueHandler();
-  bool _udpReceivePacket(pbuf *pb, const ip_addr_t *addr, uint16_t port);
 };
 
 }  // namespace esphome::hm_rf_bridge

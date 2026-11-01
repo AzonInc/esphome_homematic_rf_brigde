@@ -29,6 +29,7 @@ namespace esphome::hm_rf_bridge {
 
 class FrameHandler {
  public:
+  virtual ~FrameHandler() = default;
   virtual void handleFrame(unsigned char *buffer, uint16_t len) = 0;
 };
 
