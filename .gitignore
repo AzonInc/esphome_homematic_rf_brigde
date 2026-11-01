@@ -2,3 +2,4 @@
 /*/.esphome
 /.venv/
 .devcontainer/local/
+__pycache__/
