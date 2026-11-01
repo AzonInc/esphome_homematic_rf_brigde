@@ -30,8 +30,6 @@ CONF_RADIO_MODULE_TYPE = "radio_module_type"
 CONF_FIRMWARE_VERSION = "firmware_version"
 CONF_SERIAL = "serial"
 CONF_SGTIN = "sgtin"
-# Deprecated spelling, still accepted for existing configurations
-CONF_SGTIN_LEGACY = "SGTIN"
 
 LED_SETTERS = {
     CONF_RED_LED: "set_red_led",
@@ -47,21 +45,6 @@ TEXT_SENSOR_SETTERS = {
 }
 
 
-def _rename_legacy_sgtin(config):
-    if CONF_SGTIN_LEGACY not in config:
-        return config
-    if CONF_SGTIN in config:
-        raise cv.Invalid(f"Use either '{CONF_SGTIN}' or '{CONF_SGTIN_LEGACY}', not both")
-    _LOGGER.warning(
-        "hm_rf_bridge: '%s' is deprecated, please use '%s' instead",
-        CONF_SGTIN_LEGACY,
-        CONF_SGTIN,
-    )
-    config = config.copy()
-    config[CONF_SGTIN] = config.pop(CONF_SGTIN_LEGACY)
-    return config
-
-
 def _consume_sockets(config):
     """Register socket needs for this component."""
     #  1 listening socket + 1 concurrent client connections
@@ -70,7 +53,6 @@ def _consume_sockets(config):
 
 
 CONFIG_SCHEMA = cv.All(
-    _rename_legacy_sgtin,
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(HmRFBridge),
