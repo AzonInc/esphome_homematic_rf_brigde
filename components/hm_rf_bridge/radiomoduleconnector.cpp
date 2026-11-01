@@ -17,6 +17,7 @@
  */
 
 #include <stdlib.h>
+#include <algorithm>
 #include "radiomoduleconnector.h"
 #include "hmframe.h"
 #include "esphome/core/log.h"
@@ -68,10 +69,20 @@ void RadioModuleConnector::_serialQueueHandler() {
   uart_flush_input(_uart_num);
 
   for (;;) {
-    int len = uart_read_bytes(_uart_num, buffer, this->_buffer_size, pdMS_TO_TICKS(20));
-    if (len > 0) {
-      _streamParser->append(buffer, len);
+    // Block until at least one byte arrives, then drain what is already buffered. Reading the full
+    // buffer size with a timeout would hold back every frame until the timeout expires.
+    int len = uart_read_bytes(_uart_num, buffer, 1, portMAX_DELAY);
+    if (len <= 0)
+      continue;
+
+    size_t available = 0;
+    uart_get_buffered_data_len(_uart_num, &available);
+    if (available > 0) {
+      int more = uart_read_bytes(_uart_num, buffer + 1, std::min(available, this->_buffer_size - 1), 0);
+      if (more > 0)
+        len += more;
     }
+    _streamParser->append(buffer, len);
   }
 
   free(buffer);
