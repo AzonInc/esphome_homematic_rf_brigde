@@ -46,6 +46,9 @@ class RawUartUdpListener : FrameHandler {
   SemaphoreHandle_t _sendMutex{nullptr};
   TaskHandle_t _tHandle = NULL;
   std::function<void()> _onConnectionChanged;
+  // Packet buffers live in the (heap allocated) listener, not on the 4 KB task stacks
+  unsigned char _rxBuffer[MAX_PACKET_SIZE];  // UDP task only
+  unsigned char _txBuffer[MAX_PACKET_SIZE];  // guarded by _sendMutex
 
   void handlePacket(unsigned char *data, size_t length, uint32_t addr, uint16_t port);
   void sendMessage(unsigned char command, unsigned char *buffer, size_t len);

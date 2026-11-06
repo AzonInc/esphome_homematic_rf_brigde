@@ -181,23 +181,23 @@ void RawUartUdpListener::sendMessage(unsigned char command, unsigned char *buffe
   if (!port)
     return;
 
-  unsigned char sendBuffer[MAX_PACKET_SIZE];
-  sendBuffer[0] = command;
-  sendBuffer[1] = (unsigned char) atomic_fetch_add(&_counter, 1);
-
-  if (len)
-    memcpy(sendBuffer + 2, buffer, len);
-
-  *((uint16_t *) (sendBuffer + len + 2)) = htons(HMFrame::crc(sendBuffer, len + 2));
-
   struct sockaddr_in to {};
   to.sin_family = AF_INET;
   to.sin_addr.s_addr = address;
   to.sin_port = htons(port);
 
-  // Called from the UART task (frames) and the UDP task (responses, keep alives)
+  // Called from the UART task (frames) and the UDP task (responses, keep alives); the mutex also
+  // guards _txBuffer, which is a member because the task stacks are too small for it
   xSemaphoreTake(_sendMutex, portMAX_DELAY);
-  _socket->sendto(sendBuffer, len + 4, 0, reinterpret_cast<struct sockaddr *>(&to), sizeof(to));
+  _txBuffer[0] = command;
+  _txBuffer[1] = (unsigned char) atomic_fetch_add(&_counter, 1);
+
+  if (len)
+    memcpy(_txBuffer + 2, buffer, len);
+
+  *((uint16_t *) (_txBuffer + len + 2)) = htons(HMFrame::crc(_txBuffer, len + 2));
+
+  _socket->sendto(_txBuffer, len + 4, 0, reinterpret_cast<struct sockaddr *>(&to), sizeof(to));
   xSemaphoreGive(_sendMutex);
 }
 
@@ -243,15 +243,15 @@ bool RawUartUdpListener::start() {
 }
 
 void RawUartUdpListener::_udpQueueHandler() {
-  unsigned char buffer[MAX_PACKET_SIZE];
   int64_t nextKeepAliveSentOut = esp_timer_get_time();
 
   for (;;) {
     struct sockaddr_in from {};
     socklen_t from_len = sizeof(from);
-    ssize_t len = _socket->recvfrom(buffer, sizeof(buffer), reinterpret_cast<struct sockaddr *>(&from), &from_len);
+    ssize_t len =
+        _socket->recvfrom(_rxBuffer, sizeof(_rxBuffer), reinterpret_cast<struct sockaddr *>(&from), &from_len);
     if (len > 0 && from.sin_family == AF_INET) {
-      handlePacket(buffer, len, from.sin_addr.s_addr, ntohs(from.sin_port));
+      handlePacket(_rxBuffer, len, from.sin_addr.s_addr, ntohs(from.sin_port));
     }
 
     if (atomic_load(&_remotePort) != 0) {
