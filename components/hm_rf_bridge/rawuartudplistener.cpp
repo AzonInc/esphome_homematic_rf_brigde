@@ -78,13 +78,11 @@ void RawUartUdpListener::handlePacket(unsigned char *data, size_t length, uint32
           atomic_store(&_endpointConnectionIdentifier, endpointConnectionIdentifier);
           setConnectionStarted(false);
         } else if (data[3] != (endpointConnectionIdentifier & 0xff)) {
-          if (atomic_load(&_remotePort) != 0) {
-            ESP_LOGW(TAG, "Received raw-uart reconnect packet with invalid endpoint identifier %d, should be %d", data[3],
-                     endpointConnectionIdentifier);
-            return;
-          }
-          // No active connection (e.g. after reboot) — treat stale identifier as new connection
-          ESP_LOGD(TAG, "Received raw-uart reconnect packet with stale endpoint identifier %d, accepting as new connection", data[3]);
+          // Unknown identifier (we rebooted, or the client missed our previous answer): start a new
+          // connection. Rejecting it would lock the client out for good, because it keeps retrying with
+          // the same identifier from a fresh port and every retry refreshes the keep alive timeout.
+          ESP_LOGD(TAG, "Reconnect with unknown endpoint identifier %d (expected %d), starting new connection", data[3],
+                   endpointConnectionIdentifier & 0xff);
           endpointConnectionIdentifier += 2;
           atomic_store(&_endpointConnectionIdentifier, endpointConnectionIdentifier);
           setConnectionStarted(false);
